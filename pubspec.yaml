@@ -1,0 +1,48 @@
+name: eri
+description: Emergency Route Intelligence — Dispatcher Dashboard for CIC26 Problem Statement #18
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.4.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Firebase — Free Spark plan
+  firebase_core: ^3.6.0
+  cloud_firestore: ^5.4.4
+
+  # State Management
+  flutter_riverpod: ^2.6.1
+
+  # Maps — Free (OpenStreetMap, no API key for tiles)
+  flutter_map: ^7.0.2
+  latlong2: ^0.9.1
+
+  # HTTP for ORS and Nominatim APIs
+  http: ^1.2.2
+
+  # Animations
+  flutter_animate: ^4.5.0
+
+  # Fonts
+  google_fonts: ^6.2.1
+
+  # Utilities
+  intl: ^0.19.0
+  equatable: ^2.0.7
+  uuid: ^4.5.1
+
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/

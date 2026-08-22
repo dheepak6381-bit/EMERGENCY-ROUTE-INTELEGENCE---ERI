@@ -1,0 +1,69 @@
+import '../../data/models/hospital_model.dart';
+import '../../core/constants/app_constants.dart';
+
+/// Hospital ranking score formula (spec §3.2):
+///   score = w1*(1/ETA) + w2*(specialty_match) + w3*(1 - current_load/100)
+///
+/// Weights (AppConstants): wEta=0.5, wSpecialty=0.3, wCapacity=0.2
+class ScoringEngine {
+  ScoringEngine._();
+
+  /// Returns score in range [0.0, 1.0] — higher is better.
+  static double score(
+    HospitalModel hospital,
+    Duration eta,
+    EmergencyType emergencyType,
+  ) {
+    // ETA score: inverse of minutes; +1 avoids division by zero
+    final etaMinutes = eta.inSeconds / 60.0;
+    final etaScore = 1.0 / (etaMinutes + 1);
+
+    // Specialty match: 1.0 if hospital currently accepts this emergency type (has active capacity in that dept)
+    final specialtyScore =
+        hospital.emergencyTypesAccepted.contains(emergencyType.firestoreKey) ? 1.0 : 0.0;
+
+    // Capacity score: 1 - load fraction (higher availability = higher score)
+    final capacityScore = 1.0 - (hospital.currentLoad.clamp(0, 100) / 100.0);
+
+    return (AppConstants.wEta * etaScore) +
+        (AppConstants.wSpecialty * specialtyScore) +
+        (AppConstants.wCapacity * capacityScore);
+  }
+
+  /// Plain-English reasoning string shown on each hospital card.
+  static String reasoningString(
+    HospitalModel hospital,
+    Duration eta,
+    EmergencyType emergencyType,
+    int rank,
+    List<({HospitalModel hospital, Duration eta})> allCandidates,
+  ) {
+    final etaMin = eta.inMinutes;
+    final specialtyMatch =
+        hospital.emergencyTypesAccepted.contains(emergencyType.firestoreKey);
+
+    if (rank == 1) {
+      // Build contextual comparison with 2nd-best
+      final parts = <String>[];
+      if (allCandidates.length > 1) {
+        final second = allCandidates[1];
+        final etaDiff = second.eta.inMinutes - etaMin;
+        if (etaDiff > 0) {
+          parts.add('${etaDiff} min closer than nearest alternative');
+        }
+      }
+      if (specialtyMatch) {
+        parts.add('accepts ${emergencyType.label.toLowerCase()} cases');
+      }
+      parts.add('${100 - hospital.currentLoad}% capacity available');
+      return 'Selected: ${parts.join(', ')}.';
+    } else if (rank == 2) {
+      final reason = specialtyMatch
+          ? 'Has ${emergencyType.label} capability'
+          : 'Higher availability';
+      return '$reason; ${etaMin} min ETA, ${100 - hospital.currentLoad}% free.';
+    } else {
+      return 'Backup option: ${etaMin} min ETA, ${hospital.currentLoad}% current load.';
+    }
+  }
+}
