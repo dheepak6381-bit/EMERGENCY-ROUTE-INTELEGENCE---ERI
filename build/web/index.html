@@ -83,5 +83,17 @@
     <div class="text">Establishing Uplink...</div>
   </div>
   <script src="flutter_bootstrap.js" async></script>
+  <script>
+    window.addEventListener('flutter-first-frame', function() {
+      var loader = document.getElementById('loader');
+      if (loader) {
+        loader.style.transition = 'opacity 0.5s ease-out';
+        loader.style.opacity = '0';
+        setTimeout(function() {
+          loader.remove();
+        }, 500);
+      }
+    });
+  </script>
 </body>
 </html>
