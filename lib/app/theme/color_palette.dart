@@ -6,12 +6,12 @@ class AppColors {
   AppColors._();
 
   // Backgrounds
-  static const Color bgScaffold = Color(0xFF060913); // Deepest space black
-  static const Color bgPanel = Color(0xFF0B1221); // Slightly lighter
-  static const Color bgCard = Color(0xFF131D33); // Card bg
-  static const Color bgCardHover = Color(0xFF1A2744); // Card hover bg
-  static const Color bgInput = Color(0xFF0F162A); 
-  static const Color bgTopBar = Color(0xFF0A101C); 
+  static const Color bgScaffold = Color(0xFF04060A); // Pitch black/deep space
+  static const Color bgPanel = Color(0x880A0F1A); // 53% opacity for frosted glass
+  static const Color bgCard = Color(0x66131D33); // Card bg translucent
+  static const Color bgCardHover = Color(0xAA1A2744); // Card hover translucent
+  static const Color bgInput = Color(0x660F162A); 
+  static const Color bgTopBar = Color(0xBB04060A); 
 
   // Accent / Interactive (from ERI Logo)
   static const Color accentBlue = Color(0xFF0055FF); // Vibrant logo blue

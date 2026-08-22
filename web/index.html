@@ -32,7 +32,56 @@
   <title>eri</title>
   <link rel="manifest" href="manifest.json">
 </head>
-<body>
+<body style="background-color: #06090e; margin: 0; overflow: hidden;">
+  <style>
+    body {
+      background-color: #06090e;
+      margin: 0;
+      overflow: hidden;
+    }
+    .loading-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      background-color: #06090e;
+      z-index: 9999;
+    }
+    .logo {
+      width: 120px;
+      height: 120px;
+      animation: pulse 2s infinite ease-in-out;
+      filter: drop-shadow(0 0 20px rgba(0, 255, 255, 0.5));
+    }
+    .text {
+      margin-top: 30px;
+      color: #00ffff;
+      font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      font-size: 1.2rem;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      animation: fade 1.5s infinite alternate;
+    }
+    @keyframes pulse {
+      0% { transform: scale(0.9); }
+      50% { transform: scale(1.1); filter: drop-shadow(0 0 40px rgba(0, 255, 255, 0.9)); }
+      100% { transform: scale(0.9); }
+    }
+    @keyframes fade {
+      0% { opacity: 0.4; }
+      100% { opacity: 1; }
+    }
+  </style>
+  <div class="loading-container" id="loader">
+    <!-- Flutter web copies assets to assets/assets/... -->
+    <img src="assets/assets/images/eri_logo.png" alt="ERI Logo" class="logo" onerror="this.src='favicon.png'" />
+    <div class="text">Establishing Uplink...</div>
+  </div>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

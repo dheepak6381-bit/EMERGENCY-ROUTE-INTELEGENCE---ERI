@@ -11,6 +11,7 @@ import 'widgets/map_panel/map_panel.dart';
 import 'widgets/hospital_panel/hospital_panel.dart';
 import 'widgets/simulation/simulation_panel.dart';
 import 'widgets/bottom_bar/metrics_bar.dart';
+import 'dart:ui';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -78,15 +79,20 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       ),
 
                       // ── Right Panel (40%) ──────────────────────────────────────
-                      Container(
-                        width: 380,
-                        decoration: const BoxDecoration(
-                          color: AppColors.bgPanel,
-                          border: Border(
-                            left: BorderSide(color: AppColors.borderDefault),
+                      ClipRect(
+                        child: BackdropFilter(
+                          filter: ImageFilter.blur(sigmaX: 16.0, sigmaY: 16.0),
+                          child: Container(
+                            width: 380,
+                            decoration: const BoxDecoration(
+                              color: AppColors.bgPanel,
+                              border: Border(
+                                left: BorderSide(color: AppColors.borderDefault),
+                              ),
+                            ),
+                            child: _SidePanelContent(showSimPanel: showSimPanel),
                           ),
                         ),
-                        child: _SidePanelContent(showSimPanel: showSimPanel),
                       ),
                     ],
                   );
@@ -144,18 +150,21 @@ class _MobileBottomSheet extends StatelessWidget {
       minChildSize: 0.15,
       maxChildSize: 0.85,
       builder: (context, scrollController) {
-        return Container(
-          decoration: BoxDecoration(
-            color: AppColors.bgPanel.withOpacity(0.95), // Glassmorphism!
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-            border: Border.all(color: AppColors.borderDefault.withOpacity(0.5)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.5),
-                blurRadius: 20,
+        return ClipRRect(
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 16.0, sigmaY: 16.0),
+            child: Container(
+              decoration: BoxDecoration(
+                color: AppColors.bgPanel, // Glassmorphism!
+                border: Border.all(color: AppColors.borderDefault.withOpacity(0.5)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.5),
+                    blurRadius: 20,
+                  ),
+                ],
               ),
-            ],
-          ),
           child: Column(
             children: [
               // Drag handle
@@ -178,6 +187,8 @@ class _MobileBottomSheet extends StatelessWidget {
                 const SimulationPanel(),
               ],
             ],
+          ),
+            ),
           ),
         );
       },

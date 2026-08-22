@@ -12,6 +12,7 @@ import '../../../../providers/routing_provider.dart';
 import '../../../../providers/hospital_provider.dart';
 import '../../../../data/services/nominatim_service.dart';
 import '../../../../data/models/road_condition_model.dart';
+import 'dart:ui';
 
 class MapPanel extends ConsumerStatefulWidget {
   const MapPanel({super.key});
@@ -154,10 +155,27 @@ class _MapPanelState extends ConsumerState<MapPanel>
             if (_animatedRoutePoints.length > 1)
               PolylineLayer(
                 polylines: [
+                  // Outer Glow
                   Polyline(
                     points: _animatedRoutePoints,
-                    color: AppColors.accentCyan,
-                    strokeWidth: 4.5,
+                    color: AppColors.accentCyan.withOpacity(0.3),
+                    strokeWidth: 16.0,
+                    strokeCap: StrokeCap.round,
+                    strokeJoin: StrokeJoin.round,
+                  ),
+                  // Inner Glow
+                  Polyline(
+                    points: _animatedRoutePoints,
+                    color: AppColors.accentCyan.withOpacity(0.6),
+                    strokeWidth: 8.0,
+                    strokeCap: StrokeCap.round,
+                    strokeJoin: StrokeJoin.round,
+                  ),
+                  // Core
+                  Polyline(
+                    points: _animatedRoutePoints,
+                    color: Colors.white,
+                    strokeWidth: 3.5,
                     strokeCap: StrokeCap.round,
                     strokeJoin: StrokeJoin.round,
                   ),
@@ -190,47 +208,52 @@ class _MapPanelState extends ConsumerState<MapPanel>
           right: 16,
           child: Column(
             children: [
-              Container(
-                decoration: BoxDecoration(
-                  color: AppColors.bgPanel.withOpacity(0.95),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: AppColors.borderDefault),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.3),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
+              ClipRect(
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 12.0, sigmaY: 12.0),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: AppColors.bgPanel,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.borderDefault),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.3),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-                child: TextField(
-                  controller: _searchController,
-                  style: GoogleFonts.inter(
-                      color: AppColors.textPrimary, fontSize: 13),
-                  decoration: InputDecoration(
-                    hintText: 'Search incident location...',
-                    hintStyle: GoogleFonts.inter(
-                        color: AppColors.textTertiary, fontSize: 13),
-                    prefixIcon: const Icon(Icons.search,
-                        color: AppColors.textSecondary, size: 18),
-                    suffixIcon: _isSearching
-                        ? const Padding(
-                            padding: EdgeInsets.all(12),
-                            child: SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: AppColors.accentCyan,
-                              ),
-                            ),
-                          )
-                        : null,
-                    border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 14),
+                    child: TextField(
+                      controller: _searchController,
+                      style: GoogleFonts.inter(
+                          color: AppColors.textPrimary, fontSize: 13),
+                      decoration: InputDecoration(
+                        hintText: 'Search incident location...',
+                        hintStyle: GoogleFonts.inter(
+                            color: AppColors.textTertiary, fontSize: 13),
+                        prefixIcon: const Icon(Icons.search,
+                            color: AppColors.textSecondary, size: 18),
+                        suffixIcon: _isSearching
+                            ? const Padding(
+                                padding: EdgeInsets.all(12),
+                                child: SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: AppColors.accentCyan,
+                                  ),
+                                ),
+                              )
+                            : null,
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 14),
+                      ),
+                      onChanged: _performSearch,
+                    ),
                   ),
-                  onChanged: _performSearch,
                 ),
               ),
 
@@ -463,13 +486,16 @@ class _RouteBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: AppColors.bgPanel.withOpacity(0.95),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.accentCyan.withOpacity(0.3)),
-      ),
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 12.0, sigmaY: 12.0),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: AppColors.bgPanel,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: AppColors.accentCyan.withOpacity(0.3)),
+          ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -497,6 +523,8 @@ class _RouteBadge extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    ),
       ),
     );
   }

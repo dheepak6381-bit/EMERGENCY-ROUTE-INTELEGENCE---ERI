@@ -40,7 +40,7 @@ class AppConstants {
   static const double defaultZoom = 11.5;
   static const double incidentZoom = 13.0;
   static const String osmTileUrl =
-      'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+      'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
   static const String osmUserAgent = 'com.eri.app/1.0';
 
   // ── OSRM API ──────────────────────────────────────────────────────────────
