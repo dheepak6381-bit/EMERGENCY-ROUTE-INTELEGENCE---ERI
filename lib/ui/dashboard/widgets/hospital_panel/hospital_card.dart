@@ -175,7 +175,7 @@ class _HospitalCardState extends State<HospitalCard> {
                       Tooltip(
                         message: 'Composite score (ETA×50% + Specialty×30% + Capacity×20%)',
                         child: TweenAnimationBuilder<double>(
-                          tween: Tween<double>(begin: 0, end: rh.score * 100),
+                          tween: Tween<double>(begin: 0, end: rh.score.total * 100),
                           duration: const Duration(milliseconds: 1200),
                           curve: Curves.easeOutCubic,
                           builder: (context, value, child) {
@@ -232,6 +232,54 @@ class _HospitalCardState extends State<HospitalCard> {
                               height: 1.4,
                             ),
                           ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  // ── Score Breakdown ──────────────────────────────────────────
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AppColors.bgScaffold.withOpacity(0.5),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                          color: AppColors.borderDefault.withOpacity(0.5)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'SCORE BREAKDOWN',
+                          style: GoogleFonts.inter(
+                            color: AppColors.textTertiary,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        _ScoreComponentBar(
+                          label: 'ETA (50%)',
+                          value: rh.score.etaScore * AppConstants.wEta,
+                          max: AppConstants.wEta,
+                          color: AppColors.accentBlue,
+                        ),
+                        const SizedBox(height: 4),
+                        _ScoreComponentBar(
+                          label: 'Specialty (30%)',
+                          value: rh.score.specialtyScore * AppConstants.wSpecialty,
+                          max: AppConstants.wSpecialty,
+                          color: AppColors.accentCyan,
+                        ),
+                        const SizedBox(height: 4),
+                        _ScoreComponentBar(
+                          label: 'Capacity (20%)',
+                          value: rh.score.capacityScore * AppConstants.wCapacity,
+                          max: AppConstants.wCapacity,
+                          color: AppColors.statusGreen,
                         ),
                       ],
                     ),
@@ -304,7 +352,75 @@ class _Badge extends StatelessWidget {
             ),
           ),
         ],
-      ),
     );
   }
 }
+
+class _ScoreComponentBar extends StatelessWidget {
+  final String label;
+  final double value;
+  final double max;
+  final Color color;
+
+  const _ScoreComponentBar({
+    required this.label,
+    required this.value,
+    required this.max,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 90,
+          child: Text(
+            label,
+            style: GoogleFonts.inter(
+              color: AppColors.textSecondary,
+              fontSize: 10,
+            ),
+          ),
+        ),
+        Expanded(
+          child: Stack(
+            children: [
+              Container(
+                height: 4,
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              TweenAnimationBuilder<double>(
+                tween: Tween<double>(begin: 0, end: (max > 0) ? (value / max).clamp(0.0, 1.0) : 0),
+                duration: const Duration(milliseconds: 1000),
+                curve: Curves.easeOutCubic,
+                builder: (context, animValue, child) {
+                  return FractionallySizedBox(
+                    widthFactor: animValue,
+                    child: Container(
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: color,
+                        borderRadius: BorderRadius.circular(2),
+                        boxShadow: [
+                          BoxShadow(
+                            color: color.withOpacity(0.5),
+                            blurRadius: 4,
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+

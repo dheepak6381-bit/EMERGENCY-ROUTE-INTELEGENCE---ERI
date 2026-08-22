@@ -5,11 +5,25 @@ import '../../core/constants/app_constants.dart';
 ///   score = w1*(1/ETA) + w2*(specialty_match) + w3*(1 - current_load/100)
 ///
 /// Weights (AppConstants): wEta=0.5, wSpecialty=0.3, wCapacity=0.2
+class ScoreBreakdown {
+  final double total;
+  final double etaScore;
+  final double specialtyScore;
+  final double capacityScore;
+
+  const ScoreBreakdown({
+    required this.total,
+    required this.etaScore,
+    required this.specialtyScore,
+    required this.capacityScore,
+  });
+}
+
 class ScoringEngine {
   ScoringEngine._();
 
-  /// Returns score in range [0.0, 1.0] — higher is better.
-  static double score(
+  /// Returns score breakdown.
+  static ScoreBreakdown score(
     HospitalModel hospital,
     Duration eta,
     EmergencyType emergencyType,
@@ -25,9 +39,16 @@ class ScoringEngine {
     // Capacity score: 1 - load fraction (higher availability = higher score)
     final capacityScore = 1.0 - (hospital.currentLoad.clamp(0, 100) / 100.0);
 
-    return (AppConstants.wEta * etaScore) +
+    final total = (AppConstants.wEta * etaScore) +
         (AppConstants.wSpecialty * specialtyScore) +
         (AppConstants.wCapacity * capacityScore);
+
+    return ScoreBreakdown(
+      total: total,
+      etaScore: etaScore,
+      specialtyScore: specialtyScore,
+      capacityScore: capacityScore,
+    );
   }
 
   /// Plain-English reasoning string shown on each hospital card.

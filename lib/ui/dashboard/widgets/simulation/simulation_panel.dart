@@ -7,6 +7,8 @@ import '../../../../providers/simulation_provider.dart';
 import '../../../../providers/hospital_provider.dart';
 import '../../../../data/models/hospital_model.dart';
 import '../../../../data/models/road_condition_model.dart';
+import '../../../../data/services/osrm_service.dart';
+import '../../../../providers/routing_provider.dart';
 
 /// Simulation / Ops Control Panel
 /// Styled as a real ops console — not an obvious "demo button"
@@ -82,6 +84,106 @@ class SimulationPanel extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // ── Hackathon Presets ────────────────────────────────────
+                Text(
+                  'SCENARIO PRESETS',
+                  style: GoogleFonts.inter(
+                    color: AppColors.textTertiary,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                InkWell(
+                  onTap: () => ref.read(simulationProvider.notifier).simulateRushHour(),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: AppColors.accentCyan.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: AppColors.accentCyan.withOpacity(0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.warning_amber_rounded, color: AppColors.accentCyan, size: 16),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Simulate 6:15 PM Rush Hour',
+                            style: GoogleFonts.inter(
+                              color: AppColors.accentCyan,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        const Icon(Icons.play_arrow, color: AppColors.accentCyan, size: 16),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // ── Network Resilience ───────────────────────────────────
+                Text(
+                  'NETWORK RESILIENCE',
+                  style: GoogleFonts.inter(
+                    color: AppColors.textTertiary,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                StatefulBuilder(
+                  builder: (context, setState) {
+                    final isFailing = OsrmService().simulateFailure;
+                    return InkWell(
+                      onTap: () {
+                        setState(() {
+                          OsrmService().simulateFailure = !isFailing;
+                        });
+                        ref.read(routingProvider.notifier).computeRoutes();
+                      },
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                        decoration: BoxDecoration(
+                          color: isFailing ? AppColors.statusRed.withOpacity(0.1) : AppColors.bgCard,
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: isFailing ? AppColors.statusRed.withOpacity(0.4) : AppColors.borderDefault),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(isFailing ? Icons.wifi_off : Icons.wifi, color: isFailing ? AppColors.statusRed : AppColors.statusGreen, size: 16),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                isFailing ? 'OSRM Service: Offline' : 'OSRM Service: Online',
+                                style: GoogleFonts.inter(
+                                  color: isFailing ? AppColors.statusRed : AppColors.textSecondary,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            if (!isFailing)
+                              const Icon(Icons.power_settings_new, color: AppColors.textTertiary, size: 16)
+                            else
+                              const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(color: AppColors.statusRed, strokeWidth: 2),
+                              ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 16),
                 // ── Road Conditions ──────────────────────────────────────
                 Text(
                   'ROAD CONDITIONS',

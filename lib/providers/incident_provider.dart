@@ -54,6 +54,28 @@ final incidentProvider =
   (ref) => IncidentNotifier(),
 );
 
+final secondaryIncidentProvider =
+    StateNotifierProvider<IncidentNotifier, IncidentState?>(
+  (ref) => _NullableIncidentNotifier(),
+);
+
+class _NullableIncidentNotifier extends StateNotifier<IncidentState?> {
+  _NullableIncidentNotifier() : super(null);
+
+  void setLocation(LatLng location, {String? name}) {
+    state = IncidentState(
+      location: location,
+      locationName: name ?? '${location.latitude.toStringAsFixed(4)}, ${location.longitude.toStringAsFixed(4)}',
+      isSet: true,
+    );
+  }
+
+  void clear() {
+    state = null;
+  }
+}
+
 /// Currently selected emergency type
 final emergencyTypeProvider =
     StateProvider<EmergencyType>((ref) => EmergencyType.general);
+

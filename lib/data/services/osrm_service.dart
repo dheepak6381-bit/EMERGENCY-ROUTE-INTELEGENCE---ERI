@@ -23,6 +23,9 @@ class OsrmService {
   final http.Client _client = http.Client();
   static const String _baseUrl = AppConstants.osrmBaseUrl;
 
+  /// Debug flag to trigger fallback paths
+  bool simulateFailure = false;
+
   /// Fetch route from [origin] to [destination].
   Future<RouteResult?> getRoute({
     required LatLng origin,
@@ -30,6 +33,8 @@ class OsrmService {
     required String hospitalId,
     required List<RoadConditionModel> conditions,
   }) async {
+    if (simulateFailure) throw RateLimitException('Simulated Failure');
+
     try {
       // OSRM coordinates format: {longitude},{latitude}
       final coords = '${origin.longitude},${origin.latitude};${destination.longitude},${destination.latitude}';
@@ -99,13 +104,13 @@ class OsrmService {
     }
   }
 
-  /// Batch ETA computation using OSRM Table API.
   Future<Map<String, Duration>> getMatrix({
     required LatLng origin,
     required List<({String id, LatLng location})> hospitals,
     required List<RoadConditionModel> conditions,
   }) async {
     if (hospitals.isEmpty) return {};
+    if (simulateFailure) throw RateLimitException('Simulated Failure');
 
     try {
       // OSRM coordinates format: {longitude},{latitude}

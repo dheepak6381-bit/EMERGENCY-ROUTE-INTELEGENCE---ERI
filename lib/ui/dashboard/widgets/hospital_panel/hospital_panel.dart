@@ -104,21 +104,67 @@ class HospitalPanel extends ConsumerWidget {
       );
     }
 
-    return ListView.separated(
+    return ListView(
       controller: scrollController,
       padding: const EdgeInsets.all(12),
-      itemCount: routing.rankedHospitals.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 8),
-      itemBuilder: (context, index) {
-        final rh = routing.rankedHospitals[index];
-        return HospitalCard(
-          rankedHospital: rh,
-          emergencyType: emergencyType,
-        )
-            .animate(key: ValueKey('${rh.hospital.id}_${rh.rank}'))
-            .fadeIn(delay: Duration(milliseconds: index * 100), duration: 300.ms)
-            .slideY(begin: 0.2, end: 0, duration: 300.ms, curve: Curves.easeOut);
-      },
+      children: [
+        if (routing.secondaryRankedHospitals.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              'PRIMARY INCIDENT',
+              style: GoogleFonts.inter(
+                color: AppColors.textTertiary,
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1.2,
+              ),
+            ),
+          ),
+        ...routing.rankedHospitals.asMap().entries.map((entry) {
+          final index = entry.key;
+          final rh = entry.value;
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: HospitalCard(
+              rankedHospital: rh,
+              emergencyType: emergencyType,
+            )
+                .animate(key: ValueKey('primary_${rh.hospital.id}_${rh.rank}'))
+                .fadeIn(delay: Duration(milliseconds: index * 100), duration: 300.ms)
+                .slideY(begin: 0.2, end: 0, duration: 300.ms, curve: Curves.easeOut),
+          );
+        }),
+        if (routing.secondaryRankedHospitals.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          const Divider(color: AppColors.borderDefault),
+          const SizedBox(height: 12),
+          Text(
+            'SECONDARY INCIDENT',
+            style: GoogleFonts.inter(
+              color: AppColors.statusAmber,
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 1.2,
+            ),
+          ),
+          const SizedBox(height: 8),
+          ...routing.secondaryRankedHospitals.asMap().entries.map((entry) {
+            final index = entry.key;
+            final rh = entry.value;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: HospitalCard(
+                rankedHospital: rh,
+                emergencyType: emergencyType,
+              )
+                  .animate(key: ValueKey('secondary_${rh.hospital.id}_${rh.rank}'))
+                  .fadeIn(delay: Duration(milliseconds: index * 100), duration: 300.ms)
+                  .slideY(begin: 0.2, end: 0, duration: 300.ms, curve: Curves.easeOut),
+            );
+          }),
+        ],
+      ],
     );
   }
 }

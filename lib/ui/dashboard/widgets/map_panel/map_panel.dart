@@ -33,10 +33,17 @@ class _MapPanelState extends ConsumerState<MapPanel>
   List<NominatimResult> _searchResults = [];
   bool _isSearching = false;
 
+  // Ambulance tracking
+  LatLng? _ambulanceLocation;
+  int _ambulanceIndex = 0;
+  Timer? _ambulanceTimer;
+  String? _rerouteReason;
+
   @override
   void dispose() {
     _routeAnimController?.dispose();
     _routeTimer?.cancel();
+    _ambulanceTimer?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -88,6 +95,54 @@ class _MapPanelState extends ConsumerState<MapPanel>
     }
   }
 
+  void _startAmbulance(List<LatLng> points, bool isReroute) {
+    _ambulanceTimer?.cancel();
+    if (points.isEmpty) return;
+
+    if (!isReroute || _ambulanceLocation == null) {
+      _ambulanceLocation = points.first;
+      _ambulanceIndex = 0;
+    } else {
+      // Find closest point on new route to snap to
+      _ambulanceIndex = _findClosestIndex(points, _ambulanceLocation!);
+    }
+
+    _ambulanceTimer = Timer.periodic(const Duration(milliseconds: 200), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      if (_ambulanceIndex < points.length - 1) {
+        setState(() {
+          _ambulanceIndex++;
+          _ambulanceLocation = points[_ambulanceIndex];
+        });
+      } else {
+        timer.cancel(); // arrived
+        setState(() {
+           _rerouteReason = "Arrived at destination";
+        });
+        Future.delayed(const Duration(seconds: 3), () {
+           if (mounted) setState(() => _rerouteReason = null);
+        });
+      }
+    });
+  }
+
+  int _findClosestIndex(List<LatLng> points, LatLng target) {
+    int bestIndex = 0;
+    double minD = double.infinity;
+    const distCalc = Distance();
+    for (int i = 0; i < points.length; i++) {
+      double d = distCalc.as(LengthUnit.Meter, points[i], target);
+      if (d < minD) {
+        minD = d;
+        bestIndex = i;
+      }
+    }
+    return bestIndex;
+  }
+
   @override
   Widget build(BuildContext context) {
     final incident = ref.watch(incidentProvider);
@@ -98,9 +153,24 @@ class _MapPanelState extends ConsumerState<MapPanel>
     ref.listen(routingProvider, (prev, next) {
       final route = next.selectedRoute;
       if (route != null && route.points.length > 1) {
+        bool isReroute = false;
+        if (prev?.selectedRoute != null && prev!.selectedRoute!.points != route.points) {
+           isReroute = true;
+           if (next.rankedHospitals.isNotEmpty) {
+               setState(() {
+                 _rerouteReason = "Rerouting: ${next.rankedHospitals.first.reasoning}";
+               });
+               Future.delayed(const Duration(seconds: 4), () {
+                 if (mounted) setState(() => _rerouteReason = null);
+               });
+           }
+        }
+        
         _startRouteAnimation(route.points);
+        _startAmbulance(route.points, isReroute);
+        
         // Pan map to show route
-        if (route.points.isNotEmpty) {
+        if (route.points.isNotEmpty && !isReroute) {
           final bounds = LatLngBounds.fromPoints(route.points);
           _mapController.fitCamera(
             CameraFit.bounds(
@@ -196,8 +266,44 @@ class _MapPanelState extends ConsumerState<MapPanel>
                   height: 44,
                   child: _IncidentMarker(),
                 ),
+                if (ref.watch(secondaryIncidentProvider) != null)
+                  Marker(
+                    point: ref.watch(secondaryIncidentProvider)!.location,
+                    width: 44,
+                    height: 44,
+                    child: _IncidentMarker(isSecondary: true),
+                  ),
               ],
             ),
+
+            // Secondary Route (faded)
+            if (routing.secondaryRoute != null)
+              PolylineLayer(
+                polylines: [
+                  Polyline(
+                    points: routing.secondaryRoute!.points,
+                    color: AppColors.textTertiary.withOpacity(0.5),
+                    strokeWidth: 4.0,
+                    strokeCap: StrokeCap.round,
+                    strokeJoin: StrokeJoin.round,
+                    pattern: StrokePattern.dashed(segments: [8, 6]),
+                  ),
+                ],
+              ),
+
+            // Ambulance marker (Mid-Transit)
+            if (_ambulanceLocation != null)
+              MarkerLayer(
+                markers: [
+                  Marker(
+                    point: _ambulanceLocation!,
+                    width: 140,
+                    height: 60,
+                    alignment: Alignment.topCenter,
+                    child: _AmbulanceMarker(reason: _rerouteReason),
+                  ),
+                ],
+              ),
           ],
         ),
 
@@ -372,35 +478,38 @@ class _MapPanelState extends ConsumerState<MapPanel>
 }
 
 class _IncidentMarker extends StatelessWidget {
+  final bool isSecondary;
+  const _IncidentMarker({this.isSecondary = false});
+
   @override
   Widget build(BuildContext context) {
+    final color = isSecondary ? AppColors.statusAmber : AppColors.statusRed;
     return Stack(
       alignment: Alignment.center,
       children: [
-        // Ripple
+        // Pulse effect
         Container(
           width: 44,
           height: 44,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            border: Border.all(color: AppColors.statusRed.withOpacity(0.8), width: 2),
-            color: AppColors.statusRed.withOpacity(0.2),
+            color: color.withOpacity(0.2),
           ),
-        ).animate(onPlay: (controller) => controller.repeat())
-         .scale(begin: const Offset(1, 1), end: const Offset(2.5, 2.5), duration: 2000.ms, curve: Curves.easeOut)
-         .fadeOut(duration: 2000.ms, curve: Curves.easeOut),
-        
-        // Center dot
+        ).animate(onPlay: (controller) => controller.repeat(reverse: true))
+         .scaleXY(begin: 1.0, end: 1.5, duration: 1500.ms, curve: Curves.easeInOut)
+         .fade(begin: 0.8, end: 0.0, duration: 1500.ms),
+
+        // Core marker
         Container(
           width: 44,
           height: 44,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: AppColors.statusRed.withOpacity(0.4),
-            border: Border.all(color: AppColors.statusRed, width: 2),
+            color: color.withOpacity(0.4),
+            border: Border.all(color: color, width: 2),
             boxShadow: [
               BoxShadow(
-                color: AppColors.statusRed.withOpacity(0.6),
+                color: color.withOpacity(0.6),
                 blurRadius: 12,
                 spreadRadius: 2,
               ),
@@ -568,3 +677,59 @@ class _RoadConditionBanner extends StatelessWidget {
     );
   }
 }
+
+class _AmbulanceMarker extends StatelessWidget {
+  final String? reason;
+  const _AmbulanceMarker({this.reason});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (reason != null)
+          Container(
+            margin: const EdgeInsets.only(bottom: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: AppColors.accentCyan.withOpacity(0.9),
+              borderRadius: BorderRadius.circular(4),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.accentCyan.withOpacity(0.5),
+                  blurRadius: 8,
+                ),
+              ],
+            ),
+            child: Text(
+              reason!,
+              style: GoogleFonts.inter(
+                color: AppColors.bgScaffold,
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ).animate().fadeIn(duration: 300.ms).slideY(begin: 0.5, end: 0),
+        Container(
+          width: 24,
+          height: 24,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.white.withOpacity(0.8),
+                blurRadius: 12,
+              ),
+            ],
+          ),
+          child: const Center(
+            child: Icon(Icons.local_shipping, color: AppColors.bgScaffold, size: 14),
+          ),
+        ),
+      ],
+    );
+  }
+}
+

@@ -1,5 +1,7 @@
 import 'package:latlong2/latlong.dart';
 import '../../core/utils/traffic_classifier.dart';
+import '../../core/utils/scoring_engine.dart';
+import 'hospital_model.dart';
 import 'hospital_model.dart';
 
 /// Result of a routing computation from ORS API
@@ -43,7 +45,7 @@ class RouteResult {
 class RankedHospital {
   final HospitalModel hospital;
   final RouteResult route;
-  final double score;
+  final ScoreBreakdown score;
   final int rank;
   final String reasoning;
 

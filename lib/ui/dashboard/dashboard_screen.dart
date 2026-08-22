@@ -115,6 +115,39 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             const MetricsBar(),
         ],
       ),
+      floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: AppColors.accentCyan,
+        onPressed: () {
+          final secIncident = ref.read(secondaryIncidentProvider);
+          if (secIncident == null) {
+            // Queue a second incident slightly offset
+            final baseLoc = ref.read(incidentProvider).location;
+            ref.read(secondaryIncidentProvider.notifier).setLocation(
+              LatLng(baseLoc.latitude - 0.005, baseLoc.longitude + 0.005),
+              name: 'Secondary Emergency',
+            );
+          } else {
+            // Clear secondary incident
+            ref.read(secondaryIncidentProvider.notifier).clear();
+          }
+          ref.read(routingProvider.notifier).computeRoutes();
+        },
+        icon: Icon(
+          ref.watch(secondaryIncidentProvider) == null
+              ? Icons.add_alert
+              : Icons.close,
+          color: AppColors.bgScaffold,
+        ),
+        label: Text(
+          ref.watch(secondaryIncidentProvider) == null
+              ? 'Queue 2nd Incident'
+              : 'Clear 2nd Incident',
+          style: GoogleFonts.inter(
+            color: AppColors.bgScaffold,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
     );
   }
 }

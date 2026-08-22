@@ -15,6 +15,8 @@ import 'ticker_provider.dart';
 class RoutingState {
   final List<RankedHospital> rankedHospitals;
   final RouteResult? selectedRoute; // route to the top-ranked hospital
+  final List<RankedHospital> secondaryRankedHospitals;
+  final RouteResult? secondaryRoute; // route for second incident
   final bool isLoading;
   final String? error;
   final bool hasComputed;
@@ -22,6 +24,8 @@ class RoutingState {
   const RoutingState({
     required this.rankedHospitals,
     this.selectedRoute,
+    this.secondaryRankedHospitals = const [],
+    this.secondaryRoute,
     required this.isLoading,
     this.error,
     required this.hasComputed,
@@ -36,6 +40,8 @@ class RoutingState {
   RoutingState copyWith({
     List<RankedHospital>? rankedHospitals,
     RouteResult? selectedRoute,
+    List<RankedHospital>? secondaryRankedHospitals,
+    RouteResult? secondaryRoute,
     bool? isLoading,
     String? error,
     bool? hasComputed,
@@ -43,6 +49,8 @@ class RoutingState {
       RoutingState(
         rankedHospitals: rankedHospitals ?? this.rankedHospitals,
         selectedRoute: selectedRoute ?? this.selectedRoute,
+        secondaryRankedHospitals: secondaryRankedHospitals ?? this.secondaryRankedHospitals,
+        secondaryRoute: secondaryRoute ?? this.secondaryRoute,
         isLoading: isLoading ?? this.isLoading,
         error: error,
         hasComputed: hasComputed ?? this.hasComputed,
@@ -66,6 +74,7 @@ class RoutingNotifier extends StateNotifier<RoutingState> {
 
   Future<void> _computeRoutesInternal({List<HospitalModel>? hospitalsOverride}) async {
     final incident = _ref.read(incidentProvider);
+    final secIncident = _ref.read(secondaryIncidentProvider);
     final emergencyType = _ref.read(emergencyTypeProvider);
     final conditionsAsync = _ref.read(roadConditionsStreamProvider);
 
@@ -81,7 +90,45 @@ class RoutingNotifier extends StateNotifier<RoutingState> {
       return;
     }
 
-    // Pre-filter hospitals to the top 49 closest by straight-line distance to avoid Matrix limits
+    state = state.copyWith(isLoading: true, error: null);
+
+    final primaryRes = await _calculateForIncident(incident, hospitals, conditions, emergencyType);
+
+    List<RankedHospital> secondaryRanked = [];
+    RouteResult? secondaryRoute;
+
+    if (secIncident != null) {
+      final topHosp = primaryRes.$1.isNotEmpty ? primaryRes.$1.first.hospital : null;
+      final adjustedHospitals = hospitals.map((h) {
+        if (topHosp != null && h.id == topHosp.id) {
+          // Inflate load to prevent double booking
+          return h.copyWith(currentLoad: h.currentLoad + 35);
+        }
+        return h;
+      }).toList();
+
+      final secRes = await _calculateForIncident(secIncident, adjustedHospitals, conditions, emergencyType);
+      secondaryRanked = secRes.$1;
+      secondaryRoute = secRes.$2;
+    }
+
+    state = state.copyWith(
+      rankedHospitals: primaryRes.$1,
+      selectedRoute: primaryRes.$2,
+      secondaryRankedHospitals: secondaryRanked,
+      secondaryRoute: secondaryRoute,
+      isLoading: false,
+      hasComputed: true,
+      error: null,
+    );
+  }
+
+  Future<(List<RankedHospital>, RouteResult?)> _calculateForIncident(
+    IncidentState incident,
+    List<HospitalModel> hospitals,
+    List<RoadConditionModel> conditions,
+    EmergencyType emergencyType,
+  ) async {
     final distanceCalc = const Distance();
     final allHospitals = List<HospitalModel>.from(hospitals);
     allHospitals.sort((a, b) {
@@ -91,36 +138,24 @@ class RoutingNotifier extends StateNotifier<RoutingState> {
     });
     final limitedHospitals = allHospitals.take(49).toList();
 
-    state = state.copyWith(isLoading: true, error: null);
-
     Map<String, Duration> etaMap = {};
     try {
-      // Get ETA matrix for closest hospitals
-      final hosEntries = limitedHospitals
-          .map((h) => (id: h.id, location: h.location))
-          .toList();
-
+      final hosEntries = limitedHospitals.map((h) => (id: h.id, location: h.location)).toList();
       etaMap = await _osrm.getMatrix(
         origin: incident.location,
         hospitals: hosEntries,
         conditions: conditions,
       );
     } on RateLimitException catch (e) {
-      _ref.read(tickerProvider.notifier).addEvent(
-            '⚠ Routing service rate-limited — using cached/estimated data',
-          );
-      // fallback handled below
+      _ref.read(tickerProvider.notifier).addEvent('⚠ Routing service rate-limited — using cached/estimated data');
     } catch (e) {
-      // other errors handled silently by falling back
+      // Fallback
     }
 
-    // Score and rank hospitals
     final candidates = <({HospitalModel hospital, Duration eta})>[];
     for (final h in limitedHospitals) {
       Duration eta = etaMap[h.id] ?? const Duration(hours: 2);
       if (etaMap[h.id] == null) {
-        // Calculate estimated ETA based on straight-line distance if API fails
-        // Assume an average speed of 50 km/h in an emergency
         final distMeters = distanceCalc.as(LengthUnit.Meter, incident.location, h.location);
         final estimatedSeconds = (distMeters / 50000) * 3600;
         eta = Duration(seconds: estimatedSeconds.round());
@@ -131,26 +166,20 @@ class RoutingNotifier extends StateNotifier<RoutingState> {
     candidates.sort((a, b) {
       final scoreA = ScoringEngine.score(a.hospital, a.eta, emergencyType);
       final scoreB = ScoringEngine.score(b.hospital, b.eta, emergencyType);
-      return scoreB.compareTo(scoreA);
+      return scoreB.total.compareTo(scoreA.total);
     });
 
     final top3 = candidates.take(3).toList();
     final ranked = <RankedHospital>[];
-
     RouteResult? primaryRoute;
 
     for (int i = 0; i < top3.length; i++) {
       final item = top3[i];
       final score = ScoringEngine.score(item.hospital, item.eta, emergencyType);
       final reasoning = ScoringEngine.reasoningString(
-        item.hospital,
-        item.eta,
-        emergencyType,
-        i + 1,
-        top3,
+        item.hospital, item.eta, emergencyType, i + 1, top3,
       );
 
-      // Fetch full route only for the #1 hospital
       RouteResult? route;
       if (i == 0) {
         try {
@@ -160,42 +189,21 @@ class RoutingNotifier extends StateNotifier<RoutingState> {
             hospitalId: item.hospital.id,
             conditions: conditions,
           );
-        } on RateLimitException catch (_) {
-          // Already added ticker message in matrix call, or will be obvious
-        }
+        } catch (_) {}
         primaryRoute = route;
-
-        // Fallback route if OSRM fails
-        route ??= _fallbackRoute(
-          incident.location,
-          item.hospital.location,
-          item.hospital.id,
-          item.eta,
-        );
+        route ??= _fallbackRoute(incident.location, item.hospital.location, item.hospital.id, item.eta);
       }
 
       ranked.add(RankedHospital(
         hospital: item.hospital,
-        route: route ??
-            _fallbackRoute(
-              incident.location,
-              item.hospital.location,
-              item.hospital.id,
-              item.eta,
-            ),
+        route: route ?? _fallbackRoute(incident.location, item.hospital.location, item.hospital.id, item.eta),
         score: score,
         rank: i + 1,
         reasoning: reasoning,
       ));
     }
 
-    state = state.copyWith(
-      rankedHospitals: ranked,
-      selectedRoute: primaryRoute ?? (ranked.isNotEmpty ? ranked.first.route : null),
-      isLoading: false,
-      hasComputed: true,
-      error: null,
-    );
+    return (ranked, primaryRoute ?? (ranked.isNotEmpty ? ranked.first.route : null));
   }
 
   /// Straight-line fallback when ORS API fails.

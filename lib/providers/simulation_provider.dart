@@ -1,9 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/services/firestore_service.dart';
 import '../data/models/hospital_model.dart';
+import 'package:latlong2/latlong.dart' as latlong2;
 import 'hospital_provider.dart';
 import 'routing_provider.dart';
 import 'ticker_provider.dart';
+import 'incident_provider.dart';
 
 /// Controls the Ops Control (simulation) panel visibility
 final simulationPanelVisibleProvider = StateProvider<bool>((ref) => false);
@@ -75,6 +77,47 @@ class SimulationNotifier extends StateNotifier<bool> {
     _ref.read(tickerProvider.notifier).addEvent(
       '✓ All conditions reset — routing restored to baseline',
       isWarning: false,
+    );
+    await _ref.read(routingProvider.notifier).computeRoutes();
+  }
+
+  /// Simulate 6:15 PM Rush Hour scenario (Hackathon preset)
+  Future<void> simulateRushHour() async {
+    // 1. Find nearest hospital to spike load
+    final incident = _ref.read(incidentProvider);
+    final hospitals = _ref.read(hospitalsStreamProvider).valueOrNull ?? [];
+    if (hospitals.isNotEmpty) {
+      final distanceCalc = const latlong2.Distance();
+      var nearest = hospitals.first;
+      var minDist = distanceCalc.as(latlong2.LengthUnit.Meter, incident.location, nearest.location);
+      for (var h in hospitals) {
+        final dist = distanceCalc.as(latlong2.LengthUnit.Meter, incident.location, h.location);
+        if (dist < minDist) {
+          minDist = dist;
+          nearest = h;
+        }
+      }
+      await _fs.updateHospitalLoad(nearest.id, 95);
+    }
+
+    // 2. Block and congest roads
+    final conditions = _ref.read(roadConditionsStreamProvider).valueOrNull ?? [];
+    if (conditions.length >= 2) {
+      await _fs.updateRoadCondition(
+        conditions[0].id,
+        'construction',
+        'Road blocked — construction reported at ${conditions[0].segmentId}. Expect delays.',
+      );
+      await _fs.updateRoadCondition(
+        conditions[1].id,
+        'congested',
+        'Heavy traffic reported on ${conditions[1].segmentId}. +35% delay expected.',
+      );
+    }
+
+    _ref.read(tickerProvider.notifier).addEvent(
+      '⚠ 6:15 PM Rush Hour Simulated: High capacity at nearest hospital & heavy traffic.',
+      isWarning: true,
     );
     await _ref.read(routingProvider.notifier).computeRoutes();
   }
