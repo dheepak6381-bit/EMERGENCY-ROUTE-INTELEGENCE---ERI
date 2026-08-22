@@ -117,7 +117,14 @@ class RoutingNotifier extends StateNotifier<RoutingState> {
     // Score and rank hospitals
     final candidates = <({HospitalModel hospital, Duration eta})>[];
     for (final h in limitedHospitals) {
-      final eta = etaMap[h.id] ?? const Duration(hours: 2);
+      Duration eta = etaMap[h.id] ?? const Duration(hours: 2);
+      if (etaMap[h.id] == null) {
+        // Calculate estimated ETA based on straight-line distance if API fails
+        // Assume an average speed of 50 km/h in an emergency
+        final distMeters = distanceCalc.as(LengthUnit.Meter, incident.location, h.location);
+        final estimatedSeconds = (distMeters / 50000) * 3600;
+        eta = Duration(seconds: estimatedSeconds.round());
+      }
       candidates.add((hospital: h, eta: eta));
     }
 

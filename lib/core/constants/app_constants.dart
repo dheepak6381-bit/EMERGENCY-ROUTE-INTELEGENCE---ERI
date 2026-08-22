@@ -44,7 +44,7 @@ class AppConstants {
   static const String osmUserAgent = 'com.eri.app/1.0';
 
   // ── OSRM API ──────────────────────────────────────────────────────────────
-  static const String osrmBaseUrl = 'http://router.project-osrm.org';
+  static const String osrmBaseUrl = 'https://routing.openstreetmap.de/routed-car';
 
   // ── Nominatim ─────────────────────────────────────────────────────────────
   static const String nominatimBaseUrl = 'https://nominatim.openstreetmap.org';
