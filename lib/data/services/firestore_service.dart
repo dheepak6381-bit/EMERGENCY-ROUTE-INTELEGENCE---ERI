@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/hospital_model.dart';
 import '../models/road_condition_model.dart';
+import '../models/incident_log_model.dart';
 import '../../core/constants/app_constants.dart';
 
 /// Wraps all Firestore reads and writes for ERI.
@@ -86,5 +87,26 @@ class FirestoreService {
       );
     });
     await batch.commit();
+  }
+
+  // ── Incident Audit Log ─────────────────────────────────────────────────
+
+  /// Write a dispatched incident audit log entry to Firestore.
+  Future<void> logIncident(IncidentLogModel log) async {
+    await _db
+        .collection(AppConstants.incidentsCollection)
+        .doc(log.id)
+        .set(log.toFirestore());
+  }
+
+  /// Stream the most recent incident logs (for the Audit Log panel).
+  Stream<List<IncidentLogModel>> incidentLogsStream({int limit = 10}) {
+    return _db
+        .collection(AppConstants.incidentsCollection)
+        .orderBy('timestamp', descending: true)
+        .limit(limit)
+        .snapshots()
+        .map((snap) =>
+            snap.docs.map(IncidentLogModel.fromFirestore).toList());
   }
 }

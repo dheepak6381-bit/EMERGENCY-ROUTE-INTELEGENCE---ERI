@@ -1,15 +1,20 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:uuid/uuid.dart';
 import '../data/models/hospital_model.dart';
 import '../data/models/route_result_model.dart';
 import '../data/models/road_condition_model.dart';
+import '../data/models/incident_log_model.dart';
 import '../data/services/osrm_service.dart';
+import '../data/services/firestore_service.dart';
 import '../core/constants/app_constants.dart';
 import '../core/utils/scoring_engine.dart';
+import '../core/utils/dijkstra_engine.dart';
 import 'incident_provider.dart';
 import 'hospital_provider.dart';
 import 'ticker_provider.dart';
+import '../data/services/local_database_service.dart';
 
 /// State for the routing computation
 class RoutingState {
@@ -67,7 +72,7 @@ class RoutingNotifier extends StateNotifier<RoutingState> {
 
   Future<void> computeRoutes({List<HospitalModel>? hospitalsOverride}) async {
     if (_debounce?.isActive ?? false) _debounce!.cancel();
-    _debounce = Timer(const Duration(milliseconds: 1500), () {
+    _debounce = Timer(const Duration(milliseconds: 300), () {
       _computeRoutesInternal(hospitalsOverride: hospitalsOverride);
     });
   }
@@ -77,13 +82,51 @@ class RoutingNotifier extends StateNotifier<RoutingState> {
     final secIncident = _ref.read(secondaryIncidentProvider);
     final emergencyType = _ref.read(emergencyTypeProvider);
     final conditionsAsync = _ref.read(roadConditionsStreamProvider);
-
-    final hospitals = hospitalsOverride ?? _ref.read(hospitalsStreamProvider).valueOrNull ?? [];
     final conditions = conditionsAsync.valueOrNull ?? [];
+
+    // ── Dynamic Hospital Discovery (Live + Offline 70k) ────────────
+    var hospitals = <HospitalModel>[];
+    try {
+      final overpass = _ref.read(overpassServiceProvider);
+      hospitals = await overpass.fetchLiveHospitals(
+        incidentLocation: incident.location,
+        radiusKm: 30.0,
+      );
+      if (hospitals.length < 5) {
+        _ref.read(tickerProvider.notifier).addEvent('Expanding live search radius to 100km...');
+        hospitals = await overpass.fetchLiveHospitals(
+          incidentLocation: incident.location,
+          radiusKm: 100.0,
+        );
+      }
+    } catch (e) {
+      _ref.read(tickerProvider.notifier).addEvent('⚠ Network timeout. Initializing Offline 70k Database...', isWarning: true);
+    }
+
+    // Master Offline Fallback (70,000 Hospitals Database)
+    if (hospitals.isEmpty) {
+      hospitals = await LocalDatabaseService.instance.searchNearbyOffline(
+        location: incident.location,
+        radiusKm: 150.0, // Expand radius for offline to guarantee finding something
+      );
+      if (hospitals.isNotEmpty) {
+        _ref.read(tickerProvider.notifier).addEvent('✓ Offline Mode: Found \${hospitals.length} hospitals in master database');
+      }
+    }
+    
+    // Ultimate Fallback to Hardcoded List if JSON missing
+    if (hospitals.isEmpty) {
+      hospitals = _ref.read(tnHospitalsFallbackProvider);
+    }
+    
+    // Mix in provided overrides (e.g. from tests or manual selection)
+    if (hospitalsOverride != null && hospitalsOverride.isNotEmpty) {
+      hospitals = hospitalsOverride;
+    }
 
     if (hospitals.isEmpty) {
       state = state.copyWith(
-        error: 'No hospitals available. Check Firestore connection.',
+        error: 'No hospitals available. Please check internet connection.',
         isLoading: false,
         hasComputed: true,
       );
@@ -93,6 +136,35 @@ class RoutingNotifier extends StateNotifier<RoutingState> {
     state = state.copyWith(isLoading: true, error: null);
 
     final primaryRes = await _calculateForIncident(incident, hospitals, conditions, emergencyType);
+
+    // ── Incident Audit Log ──────────────────────────────────────────────
+    // Write to Firestore for post-incident review. Wrapped in try/catch
+    // so a logging failure never blocks the dispatcher UI.
+    if (primaryRes.$1.isNotEmpty) {
+      try {
+        final topRanked = primaryRes.$1.first;
+        final log = IncidentLogModel(
+          id: const Uuid().v4(),
+          timestamp: DateTime.now(),
+          incidentLocation: incident.location,
+          emergencyType: emergencyType.label,
+          victimCount: null, // Set by NLP engine if used
+          dispatchedHospitalName: topRanked.hospital.name,
+          dispatchedHospitalId: topRanked.hospital.id,
+          etaMinutes: topRanked.route.adjustedDuration.inMinutes.toDouble(),
+          scoreBreakdown: {
+            'eta': topRanked.score.etaScore,
+            'specialty': topRanked.score.specialtyScore,
+            'capacity': topRanked.score.capacityScore,
+          },
+          reasoningString: topRanked.reasoning,
+          roadConditionNoteIfAny: null,
+        );
+        FirestoreService().logIncident(log); // fire-and-forget
+      } catch (e) {
+        // Silent — logging must never block dispatch
+      }
+    }
 
     List<RankedHospital> secondaryRanked = [];
     RouteResult? secondaryRoute;
@@ -138,6 +210,7 @@ class RoutingNotifier extends StateNotifier<RoutingState> {
     });
     final limitedHospitals = allHospitals.take(49).toList();
 
+    // ── Step 1: Get raw ETAs from OSRM ─────────────────────────────────
     Map<String, Duration> etaMap = {};
     try {
       final hosEntries = limitedHospitals.map((h) => (id: h.id, location: h.location)).toList();
@@ -147,20 +220,48 @@ class RoutingNotifier extends StateNotifier<RoutingState> {
         conditions: conditions,
       );
     } on RateLimitException catch (e) {
-      _ref.read(tickerProvider.notifier).addEvent('⚠ Routing service rate-limited — using cached/estimated data');
+      _ref.read(tickerProvider.notifier).addEvent('⚠ Routing service rate-limited — using estimated data');
     } catch (e) {
-      // Fallback
+      // Fallback to distance-based estimation
     }
 
-    final candidates = <({HospitalModel hospital, Duration eta})>[];
+    // ── Step 2: Build Dijkstra nodes ────────────────────────────────────
+    final dijkstraNodes = <HospitalNode>[];
     for (final h in limitedHospitals) {
-      Duration eta = etaMap[h.id] ?? const Duration(hours: 2);
+      Duration rawEta = etaMap[h.id] ?? const Duration(hours: 2);
       if (etaMap[h.id] == null) {
+        // Haversine distance-based fallback ETA
         final distMeters = distanceCalc.as(LengthUnit.Meter, incident.location, h.location);
-        final estimatedSeconds = (distMeters / 50000) * 3600;
-        eta = Duration(seconds: estimatedSeconds.round());
+        final estimatedSeconds = (distMeters / 50000) * 3600; // 50 km/h avg
+        rawEta = Duration(seconds: estimatedSeconds.round());
       }
-      candidates.add((hospital: h, eta: eta));
+      dijkstraNodes.add(HospitalNode(
+        id: h.id,
+        location: h.location,
+        hospital: h,
+        rawEta: rawEta,
+      ));
+    }
+
+    // ── Step 3: Run Dijkstra's Algorithm ────────────────────────────────
+    final dijkstraResult = DijkstraEngine.findShortestPaths(
+      incident: incident.location,
+      hospitals: dijkstraNodes,
+      conditions: conditions,
+    );
+
+    _ref.read(tickerProvider.notifier).addEvent(
+      '✓ Dijkstra computed — ${dijkstraResult.paths.length} hospitals evaluated',
+    );
+
+    // ── Step 4: Score & Rank (Dijkstra ETA + Specialty + Capacity) ──────
+    final candidates = <({HospitalModel hospital, Duration eta, String? condNote})>[];
+    for (final path in dijkstraResult.paths) {
+      candidates.add((
+        hospital: path.hospital,
+        eta: path.adjustedEta,
+        condNote: path.conditionNote,
+      ));
     }
 
     candidates.sort((a, b) {
@@ -177,7 +278,8 @@ class RoutingNotifier extends StateNotifier<RoutingState> {
       final item = top3[i];
       final score = ScoringEngine.score(item.hospital, item.eta, emergencyType);
       final reasoning = ScoringEngine.reasoningString(
-        item.hospital, item.eta, emergencyType, i + 1, top3,
+        item.hospital, item.eta, emergencyType, i + 1,
+        top3.map((c) => (hospital: c.hospital, eta: c.eta)).toList(),
       );
 
       RouteResult? route;
@@ -187,7 +289,7 @@ class RoutingNotifier extends StateNotifier<RoutingState> {
             origin: incident.location,
             destination: item.hospital.location,
             hospitalId: item.hospital.id,
-            conditions: conditions,
+            conditions: conditions.toList(),
           );
         } catch (_) {}
         primaryRoute = route;
@@ -206,7 +308,7 @@ class RoutingNotifier extends StateNotifier<RoutingState> {
     return (ranked, primaryRoute ?? (ranked.isNotEmpty ? ranked.first.route : null));
   }
 
-  /// Straight-line fallback when ORS API fails.
+  /// Straight-line fallback when OSRM API fails.
   RouteResult _fallbackRoute(
     LatLng origin,
     LatLng destination,

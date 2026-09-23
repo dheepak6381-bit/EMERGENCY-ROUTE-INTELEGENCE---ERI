@@ -200,7 +200,7 @@ class _MapPanelState extends ConsumerState<MapPanel>
             },
           ),
           children: [
-            // OSM Tiles
+            // OSM Tiles (free, no API key)
             TileLayer(
               urlTemplate: AppConstants.osmTileUrl,
               userAgentPackageName: AppConstants.osmUserAgent,

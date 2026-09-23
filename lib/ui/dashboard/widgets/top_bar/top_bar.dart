@@ -5,6 +5,8 @@ import 'package:flutter_animate/flutter_animate.dart';
 import '../../../../app/theme/color_palette.dart';
 import '../../../../providers/incident_provider.dart';
 import '../../../../providers/routing_provider.dart';
+import '../../../../providers/ticker_provider.dart';
+import '../../../../core/utils/offline_nlp_engine.dart';
 import 'emergency_type_selector.dart';
 import 'status_ticker.dart';
 import '../../dialogs/how_it_works_dialog.dart';
@@ -33,10 +35,13 @@ class TopBar extends ConsumerWidget {
           child: Row(
             children: [
           // ── Logo ─────────────────────────────────────────────────────────
-          Container(
-            width: 200,
+          Flexible(
+            flex: 0,
+            child: Container(
+            constraints: const BoxConstraints(maxWidth: 280),
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
                   width: 32,
@@ -51,7 +56,8 @@ class TopBar extends ConsumerWidget {
                 ),
                 const SizedBox(width: 10),
                 if (MediaQuery.of(context).size.width > 600) ...[
-                  Column(
+                  Flexible(
+                    child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -63,6 +69,8 @@ class TopBar extends ConsumerWidget {
                           fontWeight: FontWeight.w700,
                           letterSpacing: 1.2,
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                       Text(
                         'Dispatcher Dashboard',
@@ -73,14 +81,63 @@ class TopBar extends ConsumerWidget {
                       ),
                     ],
                   ),
+                  ),
                 ],
               ],
+            ),
+          ),
+          ),
+
+          Container(width: 1, color: AppColors.borderDefault),
+
+          // ── NLP Smart Dispatch Input ───────────────────────────────────────
+          Container(
+            width: 250,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: TextField(
+              decoration: InputDecoration(
+                hintText: 'Smart Dispatch (e.g. "3 burnt in fire")',
+                hintStyle: GoogleFonts.inter(color: AppColors.textTertiary, fontSize: 11),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: AppColors.borderDefault),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: AppColors.borderDefault),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: AppColors.accentBlue),
+                ),
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                prefixIcon: const Icon(Icons.psychology, size: 16, color: AppColors.accentBlue),
+              ),
+              style: GoogleFonts.inter(color: AppColors.textPrimary, fontSize: 12),
+              onSubmitted: (value) {
+                if (value.trim().isEmpty) return;
+                
+                // Run Offline NLP Engine
+                final intent = ref.read(nlpEngineProvider).parseInput(value);
+                
+                // Update Emergency Type based on NLP intent
+                ref.read(emergencyTypeProvider.notifier).state = intent.emergencyType;
+                
+                // Show notification ticker
+                ref.read(tickerProvider.notifier).addEvent(
+                  'NLP Segregation: Detected \${intent.emergencyType.label} (Victims: \${intent.victimCount}, Critical: \${intent.isCritical})'
+                );
+                
+                // Auto-trigger the function pointer (routing computation)
+                ref.read(routingProvider.notifier).computeRoutes();
+              },
             ),
           ),
 
           Container(width: 1, color: AppColors.borderDefault),
 
-          // ── Emergency Type Selector ───────────────────────────────────────
+          // ── Emergency Type Selector (Manual Override) ─────────────────────
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 12),
             child: EmergencyTypeSelector(),

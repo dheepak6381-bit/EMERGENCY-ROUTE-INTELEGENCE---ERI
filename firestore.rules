@@ -2,21 +2,23 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     // ────────────────────────────────────────────────────────────────────────
-    // ERI Demo Rules — OPEN READ/WRITE FOR HACKATHON
-    // This allows the browser to read and write without auth for CIC26 demo.
-    // 
-    // TODO (Production):
-    // In a real-world deployment, this must be locked down to authenticated 
-    // dispatchers. Example production rules:
+    // ERI Security Rules — Anonymous-Auth-Gated Writes
     //
-    // match /{document=**} {
-    //   allow read: if request.auth != null;
-    //   allow write: if request.auth != null && request.auth.token.role == 'dispatcher';
-    // }
+    // Reads are open so the dashboard can stream hospitals and road
+    // conditions without requiring auth on every page load.
+    //
+    // Writes require Firebase Anonymous Authentication, which the app
+    // obtains on startup via FirebaseAuth.instance.signInAnonymously().
+    // This closes the wide-open anonymous write hole that existed before.
+    //
+    // TODO (Production): Upgrade to role-based auth with custom claims
+    // (e.g. request.auth.token.role == 'dispatcher') for full production
+    // security. Anonymous auth is sufficient for the SIH demo but is not
+    // production-grade access control.
     // ────────────────────────────────────────────────────────────────────────
     match /{document=**} {
       allow read: if true;
-      allow write: if true;
+      allow write: if request.auth != null;
     }
   }
 }

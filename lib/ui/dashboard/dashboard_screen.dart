@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:latlong2/latlong.dart';
 import '../../app/theme/color_palette.dart';
 import '../../providers/hospital_provider.dart';
 import '../../providers/routing_provider.dart';
@@ -10,6 +11,7 @@ import 'widgets/top_bar/top_bar.dart';
 import 'widgets/map_panel/map_panel.dart';
 import 'widgets/hospital_panel/hospital_panel.dart';
 import 'widgets/simulation/simulation_panel.dart';
+import 'widgets/audit_log/audit_log_panel.dart';
 import 'widgets/bottom_bar/metrics_bar.dart';
 import 'dart:ui';
 
@@ -54,6 +56,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     });
 
     final showSimPanel = ref.watch(simulationPanelVisibleProvider);
+    final showAuditPanel = ref.watch(auditLogVisibleProvider);
 
     return Scaffold(
       backgroundColor: AppColors.bgScaffold,
@@ -90,7 +93,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                 left: BorderSide(color: AppColors.borderDefault),
                               ),
                             ),
-                            child: _SidePanelContent(showSimPanel: showSimPanel),
+                            child: _SidePanelContent(showSimPanel: showSimPanel, showAuditPanel: showAuditPanel),
                           ),
                         ),
                       ),
@@ -154,7 +157,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
 class _SidePanelContent extends StatelessWidget {
   final bool showSimPanel;
-  const _SidePanelContent({required this.showSimPanel});
+  final bool showAuditPanel;
+  const _SidePanelContent({required this.showSimPanel, required this.showAuditPanel});
 
   @override
   Widget build(BuildContext context) {
@@ -163,6 +167,10 @@ class _SidePanelContent extends StatelessWidget {
         _RightPanelHeader(),
         const Divider(height: 1, color: AppColors.borderDefault),
         const Expanded(child: HospitalPanel()),
+        if (showAuditPanel) ...[
+          const Divider(height: 1, color: AppColors.borderDefault),
+          const AuditLogPanel(),
+        ],
         if (showSimPanel) ...[
           const Divider(height: 1, color: AppColors.borderDefault),
           const SimulationPanel(),
@@ -270,55 +278,89 @@ class _RightPanelHeader extends ConsumerWidget {
             ),
           ),
           const Spacer(),
+          // Audit Log toggle
+          _HeaderToggle(
+            label: 'LOG',
+            icon: Icons.receipt_long,
+            isActive: ref.watch(auditLogVisibleProvider),
+            onTap: () => ref
+                .read(auditLogVisibleProvider.notifier)
+                .state = !ref.read(auditLogVisibleProvider),
+          ),
+          const SizedBox(width: 6),
           // Ops Control toggle
-          Tooltip(
-            message: showSim ? 'Hide Ops Control' : 'Open Ops Control',
-            child: InkWell(
-              onTap: () => ref
-                  .read(simulationPanelVisibleProvider.notifier)
-                  .state = !showSim,
-              borderRadius: BorderRadius.circular(6),
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: showSim
-                      ? AppColors.accentBlue.withOpacity(0.15)
-                      : AppColors.bgCard,
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(
-                    color: showSim
-                        ? AppColors.accentBlue
-                        : AppColors.borderDefault,
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.tune,
-                      size: 13,
-                      color: showSim
-                          ? AppColors.accentBlue
-                          : AppColors.textSecondary,
-                    ),
-                    const SizedBox(width: 5),
-                    Text(
-                      'OPS',
-                      style: GoogleFonts.inter(
-                        color: showSim
-                            ? AppColors.accentBlue
-                            : AppColors.textSecondary,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.8,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+          _HeaderToggle(
+            label: 'OPS',
+            icon: Icons.tune,
+            isActive: showSim,
+            onTap: () => ref
+                .read(simulationPanelVisibleProvider.notifier)
+                .state = !showSim,
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Reusable compact toggle button for the right panel header.
+class _HeaderToggle extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool isActive;
+  final VoidCallback onTap;
+
+  const _HeaderToggle({
+    required this.label,
+    required this.icon,
+    required this.isActive,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: isActive ? 'Hide $label' : 'Show $label',
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(6),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: isActive
+                ? AppColors.accentBlue.withOpacity(0.15)
+                : AppColors.bgCard,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(
+              color: isActive
+                  ? AppColors.accentBlue
+                  : AppColors.borderDefault,
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                icon,
+                size: 13,
+                color: isActive
+                    ? AppColors.accentBlue
+                    : AppColors.textSecondary,
+              ),
+              const SizedBox(width: 5),
+              Text(
+                label,
+                style: GoogleFonts.inter(
+                  color: isActive
+                      ? AppColors.accentBlue
+                      : AppColors.textSecondary,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.8,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

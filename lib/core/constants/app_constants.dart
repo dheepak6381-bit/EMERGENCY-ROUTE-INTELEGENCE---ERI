@@ -5,6 +5,10 @@ import 'package:latlong2/latlong.dart';
 class AppConstants {
   AppConstants._();
 
+  // ── Dispatcher Auth ────────────────────────────────────────────────────────
+  // TODO: Change this passcode before the real SIH demo!
+  static const String dispatcherPasscode = 'ERI-2026';
+
   // ── Demo / Seed Location ──────────────────────────────────────────────────
   /// Kalasalingam Academy of Research and Education, Krishnankoil, Tamil Nadu
   static const LatLng kareLocation = LatLng(9.4145, 77.7050);
@@ -40,7 +44,7 @@ class AppConstants {
   static const double defaultZoom = 11.5;
   static const double incidentZoom = 13.0;
   static const String osmTileUrl =
-      'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+      'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
   static const String osmUserAgent = 'com.eri.app/1.0';
 
   // ── OSRM API ──────────────────────────────────────────────────────────────

@@ -26,6 +26,12 @@ class HospitalCard extends StatefulWidget {
 class _HospitalCardState extends State<HospitalCard> {
   bool _hovered = false;
 
+  static Color _bedColor(int load) {
+    if (load < 50) return AppColors.statusGreen;
+    if (load < 80) return AppColors.statusAmber;
+    return AppColors.statusRed;
+  }
+
   @override
   Widget build(BuildContext context) {
     final rh = widget.rankedHospital;
@@ -198,6 +204,61 @@ class _HospitalCardState extends State<HospitalCard> {
                   // ── Capacity Bar ─────────────────────────────────────────────
                   CapacityBar(load: hospital.currentLoad),
 
+                  const SizedBox(height: 8),
+
+                  // ── Bed Vacancy Display ───────────────────────────────────────
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: AppColors.bgScaffold.withOpacity(0.5),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color: _bedColor(hospital.currentLoad).withOpacity(0.3),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.bed_outlined,
+                          size: 14,
+                          color: _bedColor(hospital.currentLoad),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          '${hospital.bedsAvailable}',
+                          style: GoogleFonts.inter(
+                            color: _bedColor(hospital.currentLoad),
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        Text(
+                          ' / ${hospital.bedCapacity} beds free',
+                          style: GoogleFonts.inter(
+                            color: AppColors.textSecondary,
+                            fontSize: 11,
+                          ),
+                        ),
+                        const Spacer(),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: _bedColor(hospital.currentLoad).withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            '${hospital.availabilityPercent}% available',
+                            style: GoogleFonts.inter(
+                              color: _bedColor(hospital.currentLoad),
+                              fontSize: 9,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
                   const SizedBox(height: 10),
 
                   // ── Reasoning String ─────────────────────────────────────────
@@ -262,23 +323,23 @@ class _HospitalCardState extends State<HospitalCard> {
                         ),
                         const SizedBox(height: 8),
                         _ScoreComponentBar(
-                          label: 'ETA (50%)',
-                          value: rh.score.etaScore * AppConstants.wEta,
-                          max: AppConstants.wEta,
+                          label: 'ETA (${(rh.score.maxWEta * 100).toInt()}%)',
+                          value: rh.score.etaScore * rh.score.maxWEta,
+                          max: rh.score.maxWEta,
                           color: AppColors.accentBlue,
                         ),
                         const SizedBox(height: 4),
                         _ScoreComponentBar(
-                          label: 'Specialty (30%)',
-                          value: rh.score.specialtyScore * AppConstants.wSpecialty,
-                          max: AppConstants.wSpecialty,
+                          label: 'Specialty (${(rh.score.maxWSpecialty * 100).toInt()}%)',
+                          value: rh.score.specialtyScore * rh.score.maxWSpecialty,
+                          max: rh.score.maxWSpecialty,
                           color: AppColors.accentCyan,
                         ),
                         const SizedBox(height: 4),
                         _ScoreComponentBar(
-                          label: 'Capacity (20%)',
-                          value: rh.score.capacityScore * AppConstants.wCapacity,
-                          max: AppConstants.wCapacity,
+                          label: 'Capacity (${(rh.score.maxWCapacity * 100).toInt()}%)',
+                          value: rh.score.capacityScore * rh.score.maxWCapacity,
+                          max: rh.score.maxWCapacity,
                           color: AppColors.statusGreen,
                         ),
                       ],
@@ -352,6 +413,7 @@ class _Badge extends StatelessWidget {
             ),
           ),
         ],
+      ),
     );
   }
 }

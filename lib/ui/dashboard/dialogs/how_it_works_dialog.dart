@@ -61,11 +61,13 @@ class HowItWorksDialog extends StatelessWidget {
                 title: '1. Live Routing Engine',
                 color: AppColors.accentCyan,
                 body:
-                    'When you tap a location or hit DISPATCH, ERI calls the OpenRouteService Directions API '
-                    'using the real road network — not straight-line distance. The route is drawn progressively '
-                    'over ~900ms so it visibly appears "computed" rather than instantly snapping. '
-                    'Any active road conditions (from Firestore) add a delay factor: '
-                    'Congestion = +35% ETA, Construction = +20% ETA.',
+                    'ERI uses Dijkstra\'s single-source shortest-path algorithm to find the optimal hospital. '
+                    'The incident is the source node, and each candidate hospital is a destination node. '
+                    'Edge weights are the real-world ETAs from the OSRM road-network API, dynamically '
+                    'adjusted by live road conditions from Firestore (Congestion = +35% ETA, '
+                    'Construction = +20% ETA). When conditions change, the algorithm re-runs and '
+                    'the ranking can shift without recomputing routes from scratch. The top-ranked '
+                    'hospital\'s route is drawn progressively over ~900ms.',
               ),
               const SizedBox(height: 16),
 

@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:latlong2/latlong.dart';
 
@@ -41,6 +42,59 @@ class HospitalModel {
     );
   }
 
+  factory HospitalModel.fromOverpass(Map<String, dynamic> element) {
+    final tags = element['tags'] as Map<String, dynamic>? ?? {};
+    final name = tags['name'] ?? 'Hospital ${element['id']}';
+    
+    // Parse coordinates (nodes have lat/lon, ways/relations have center)
+    double lat = element['lat'] ?? element['center']?['lat'] ?? 0.0;
+    double lon = element['lon'] ?? element['center']?['lon'] ?? 0.0;
+    
+    // Estimate beds if missing
+    int beds = 100;
+    if (tags['beds'] != null) {
+      beds = int.tryParse(tags['beds'].toString()) ?? 100;
+    } else {
+      // Guess based on name
+      final nameLower = name.toLowerCase();
+      if (nameLower.contains('medical college') || nameLower.contains('general') || nameLower.contains('gh')) {
+        beds = 500;
+      } else if (nameLower.contains('clinic') || nameLower.contains('phc')) {
+        beds = 20;
+      }
+    }
+    
+    // Simulate realistic occupancy between 30% and 90%
+    // In a real app, this would query the hospital's private API.
+    final rand = Random(element['id'].hashCode);
+    int load = 30 + rand.nextInt(60);
+
+    // Specialties
+    List<String> specs = ['general'];
+    if (tags['healthcare:speciality'] != null) {
+      final sp = tags['healthcare:speciality'].toString().toLowerCase();
+      if (sp.contains('cardio')) specs.add('cardiac');
+      if (sp.contains('trauma') || sp.contains('accident')) specs.add('trauma');
+      if (sp.contains('burns')) specs.add('burns');
+      if (sp.contains('pulmon')) specs.add('respiratory');
+    } else {
+      // Add random specialties if it's a large hospital
+      if (beds > 200) {
+        specs.addAll(['trauma', 'cardiac', 'respiratory']);
+      }
+    }
+
+    return HospitalModel(
+      id: 'osm_${element['id']}',
+      name: name,
+      location: LatLng(lat, lon),
+      specialties: specs,
+      bedCapacity: beds,
+      currentLoad: load,
+      emergencyTypesAccepted: specs, // assume they accept what they specialize in
+    );
+  }
+
   HospitalModel copyWith({int? currentLoad}) {
     return HospitalModel(
       id: id,
@@ -53,6 +107,13 @@ class HospitalModel {
       lastUpdated: lastUpdated,
     );
   }
+
+  /// Number of beds currently available (free).
+  int get bedsAvailable =>
+      (bedCapacity - (bedCapacity * currentLoad.clamp(0, 100) / 100)).round();
+
+  /// Availability percentage (inverse of load).
+  int get availabilityPercent => (100 - currentLoad.clamp(0, 100));
 
   @override
   bool operator ==(Object other) =>

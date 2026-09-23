@@ -10,24 +10,48 @@ class ScoreBreakdown {
   final double etaScore;
   final double specialtyScore;
   final double capacityScore;
+  final double maxWEta;
+  final double maxWSpecialty;
+  final double maxWCapacity;
 
   const ScoreBreakdown({
     required this.total,
     required this.etaScore,
     required this.specialtyScore,
     required this.capacityScore,
+    required this.maxWEta,
+    required this.maxWSpecialty,
+    required this.maxWCapacity,
   });
 }
 
 class ScoringEngine {
   ScoringEngine._();
 
-  /// Returns score breakdown.
+  /// Returns score breakdown with severity-adaptive weights.
   static ScoreBreakdown score(
     HospitalModel hospital,
     Duration eta,
     EmergencyType emergencyType,
   ) {
+    double wEta = AppConstants.wEta;
+    double wSpecialty = AppConstants.wSpecialty;
+    double wCapacity = AppConstants.wCapacity;
+
+    if (emergencyType.firestoreKey == 'cardiac' || emergencyType.firestoreKey == 'trauma') {
+      wEta = 0.65;
+      wSpecialty = 0.20;
+      wCapacity = 0.15;
+    } else if (emergencyType.firestoreKey == 'burns' || emergencyType.firestoreKey == 'respiratory') {
+      wEta = 0.50;
+      wSpecialty = 0.30;
+      wCapacity = 0.20;
+    } else {
+      wEta = 0.45;
+      wSpecialty = 0.25;
+      wCapacity = 0.30;
+    }
+
     // ETA score: inverse of minutes; +1 avoids division by zero
     final etaMinutes = eta.inSeconds / 60.0;
     final etaScore = 1.0 / (etaMinutes + 1);
@@ -39,15 +63,18 @@ class ScoringEngine {
     // Capacity score: 1 - load fraction (higher availability = higher score)
     final capacityScore = 1.0 - (hospital.currentLoad.clamp(0, 100) / 100.0);
 
-    final total = (AppConstants.wEta * etaScore) +
-        (AppConstants.wSpecialty * specialtyScore) +
-        (AppConstants.wCapacity * capacityScore);
+    final total = (wEta * etaScore) +
+        (wSpecialty * specialtyScore) +
+        (wCapacity * capacityScore);
 
     return ScoreBreakdown(
       total: total,
       etaScore: etaScore,
       specialtyScore: specialtyScore,
       capacityScore: capacityScore,
+      maxWEta: wEta,
+      maxWSpecialty: wSpecialty,
+      maxWCapacity: wCapacity,
     );
   }
 

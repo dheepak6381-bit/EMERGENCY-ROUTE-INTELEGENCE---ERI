@@ -55,7 +55,7 @@ final incidentProvider =
 );
 
 final secondaryIncidentProvider =
-    StateNotifierProvider<IncidentNotifier, IncidentState?>(
+    StateNotifierProvider<_NullableIncidentNotifier, IncidentState?>(
   (ref) => _NullableIncidentNotifier(),
 );
 

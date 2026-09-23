@@ -2,7 +2,6 @@ import 'package:latlong2/latlong.dart';
 import '../../core/utils/traffic_classifier.dart';
 import '../../core/utils/scoring_engine.dart';
 import 'hospital_model.dart';
-import 'hospital_model.dart';
 
 /// Result of a routing computation from ORS API
 class RouteResult {
