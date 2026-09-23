@@ -44,7 +44,21 @@ class HospitalModel {
 
   factory HospitalModel.fromOverpass(Map<String, dynamic> element) {
     final tags = element['tags'] as Map<String, dynamic>? ?? {};
-    final name = tags['name'] ?? 'Hospital ${element['id']}';
+    
+    String name = tags['name'] ?? tags['name:en'] ?? '';
+    if (name.isEmpty) {
+      final bedsTemp = tags['beds'] != null ? (int.tryParse(tags['beds'].toString()) ?? 100) : 100;
+      final osmIdStr = element['id'].toString();
+      final suffix = osmIdStr.length > 4 ? osmIdStr.substring(osmIdStr.length - 4) : osmIdStr;
+      
+      if (bedsTemp >= 200) {
+        name = 'General Hospital (OSM-$suffix)';
+      } else if (bedsTemp <= 50) {
+        name = 'Local Health Center (OSM-$suffix)';
+      } else {
+        name = 'Medical Center (OSM-$suffix)';
+      }
+    }
     
     // Parse coordinates (nodes have lat/lon, ways/relations have center)
     double lat = element['lat'] ?? element['center']?['lat'] ?? 0.0;
