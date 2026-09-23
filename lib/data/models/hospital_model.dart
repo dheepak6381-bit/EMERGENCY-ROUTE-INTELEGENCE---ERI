@@ -45,7 +45,12 @@ class HospitalModel {
   factory HospitalModel.fromOverpass(Map<String, dynamic> element) {
     final tags = element['tags'] as Map<String, dynamic>? ?? {};
     
-    String name = tags['name'] ?? tags['name:en'] ?? '';
+    // Check top-level 'name' first (offline JSON format),
+    // then tags['name'] (live Overpass API format)
+    String name = (element['name'] as String?) ?? '';
+    if (name.isEmpty) {
+      name = tags['name'] ?? tags['name:en'] ?? '';
+    }
     if (name.isEmpty) {
       final bedsTemp = tags['beds'] != null ? (int.tryParse(tags['beds'].toString()) ?? 100) : 100;
       final osmIdStr = element['id'].toString();
@@ -60,52 +65,57 @@ class HospitalModel {
       }
     }
     
-    // Parse coordinates (nodes have lat/lon, ways/relations have center)
-    double lat = element['lat'] ?? element['center']?['lat'] ?? 0.0;
-    double lon = element['lon'] ?? element['center']?['lon'] ?? 0.0;
+    // Parse coordinates: top-level lat/lon (offline JSON) or nested center (Overpass ways/relations)
+    double lat = (element['lat'] as num?)?.toDouble() ?? (element['center']?['lat'] as num?)?.toDouble() ?? 0.0;
+    double lon = (element['lon'] as num?)?.toDouble() ?? (element['center']?['lon'] as num?)?.toDouble() ?? 0.0;
     
-    // Estimate beds if missing
+    // Beds: top-level 'beds' (offline JSON) or tags['beds'] (live Overpass)
     int beds = 100;
-    if (tags['beds'] != null) {
+    if (element['beds'] != null) {
+      beds = (element['beds'] is int) ? element['beds'] : (int.tryParse(element['beds'].toString()) ?? 100);
+    } else if (tags['beds'] != null) {
       beds = int.tryParse(tags['beds'].toString()) ?? 100;
     } else {
-      // Guess based on name
       final nameLower = name.toLowerCase();
-      if (nameLower.contains('medical college') || nameLower.contains('general') || nameLower.contains('gh')) {
+      if (nameLower.contains('medical college') || nameLower.contains('general') || nameLower.contains('district') || nameLower.contains('gh')) {
         beds = 500;
-      } else if (nameLower.contains('clinic') || nameLower.contains('phc')) {
+      } else if (nameLower.contains('clinic') || nameLower.contains('phc') || nameLower.contains('dispensary')) {
         beds = 20;
       }
     }
     
     // Simulate realistic occupancy between 30% and 90%
-    // In a real app, this would query the hospital's private API.
     final rand = Random(element['id'].hashCode);
     int load = 30 + rand.nextInt(60);
 
-    // Specialties
+    // Specialties: top-level (offline JSON) or tags (live Overpass)
     List<String> specs = ['general'];
-    if (tags['healthcare:speciality'] != null) {
+    if (element['specialties'] != null) {
+      specs = List<String>.from(element['specialties']);
+    } else if (tags['healthcare:speciality'] != null) {
       final sp = tags['healthcare:speciality'].toString().toLowerCase();
       if (sp.contains('cardio')) specs.add('cardiac');
       if (sp.contains('trauma') || sp.contains('accident')) specs.add('trauma');
       if (sp.contains('burns')) specs.add('burns');
       if (sp.contains('pulmon')) specs.add('respiratory');
     } else {
-      // Add random specialties if it's a large hospital
       if (beds > 200) {
         specs.addAll(['trauma', 'cardiac', 'respiratory']);
       }
     }
 
+    // ID: use top-level 'id' directly (offline JSON uses string IDs like 'osm_123')
+    final rawId = element['id'].toString();
+    final hospitalId = rawId.startsWith('osm_') || rawId.startsWith('gen_') ? rawId : 'osm_$rawId';
+
     return HospitalModel(
-      id: 'osm_${element['id']}',
+      id: hospitalId,
       name: name,
       location: LatLng(lat, lon),
       specialties: specs,
       bedCapacity: beds,
       currentLoad: load,
-      emergencyTypesAccepted: specs, // assume they accept what they specialize in
+      emergencyTypesAccepted: specs,
     );
   }
 

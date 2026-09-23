@@ -103,14 +103,47 @@ class RoutingNotifier extends StateNotifier<RoutingState> {
       _ref.read(tickerProvider.notifier).addEvent('⚠ Network timeout. Initializing Offline 70k Database...', isWarning: true);
     }
 
+    // ── Always enrich with offline 70k database ────────────
+    // Load offline hospitals to merge real names and fill gaps
+    final offlineHospitals = await LocalDatabaseService.instance.searchNearbyOffline(
+      location: incident.location,
+      radiusKm: 150.0,
+    );
+
+    if (hospitals.isNotEmpty && offlineHospitals.isNotEmpty) {
+      // Build a lookup map of offline hospitals by ID for fast matching
+      final offlineById = <String, HospitalModel>{};
+      for (final oh in offlineHospitals) {
+        offlineById[oh.id] = oh;
+      }
+
+      // Replace any live hospital with generic OSM name with offline version that has real name
+      hospitals = hospitals.map((h) {
+        if (h.name.contains('(OSM-') || h.name.startsWith('Hospital osm_')) {
+          final offlineMatch = offlineById[h.id];
+          if (offlineMatch != null && !offlineMatch.name.contains('(OSM-')) {
+            return offlineMatch;
+          }
+        }
+        return h;
+      }).toList();
+
+      // Also add any nearby offline hospitals not already in the live results
+      final liveIds = hospitals.map((h) => h.id).toSet();
+      for (final oh in offlineHospitals) {
+        if (!liveIds.contains(oh.id)) {
+          hospitals.add(oh);
+        }
+      }
+
+      _ref.read(tickerProvider.notifier).addEvent('✓ Enriched with ${offlineHospitals.length} offline hospitals');
+    }
+
     // Master Offline Fallback (70,000 Hospitals Database)
     if (hospitals.isEmpty) {
-      hospitals = await LocalDatabaseService.instance.searchNearbyOffline(
-        location: incident.location,
-        radiusKm: 150.0, // Expand radius for offline to guarantee finding something
-      );
+      hospitals = offlineHospitals;
       if (hospitals.isNotEmpty) {
-        _ref.read(tickerProvider.notifier).addEvent('✓ Offline Mode: Found \${hospitals.length} hospitals in master database');
+        _ref.read(tickerProvider.notifier).addEvent('✓ Offline Mode: Found ${hospitals.length} hospitals in master database');
       }
     }
     
